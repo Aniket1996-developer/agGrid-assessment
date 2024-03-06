@@ -9,6 +9,8 @@ import ExcelJS from "exceljs";
 
 const MyGridComponent = () => {
   const [rowData, setRowData] = useState([]);
+  const [ethPrice, setEthPrice] = useState(0);
+  // let todayDate = new Date();
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -21,6 +23,7 @@ const MyGridComponent = () => {
 
         plotGraph(response?.data?.result);
         console.log("anii", response.data.result);
+        // clg("today's date", todayDate);
       } catch (error) {
         console.log("Error fetching data:", error);
       }
@@ -28,6 +31,42 @@ const MyGridComponent = () => {
 
     fetchTransactions();
   }, []);
+
+  useEffect(() => {
+    const fetchEthPrice = async () => {
+      try {
+        const response = await axios.get(
+          "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
+        );
+        setEthPrice(response?.data?.ethereum.usd);
+        console.log("ethrumprice", response?.data?.ethereum.usd);
+      } catch (error) {
+        console.log("Error fetching ETH price:", error);
+      }
+    };
+
+    fetchEthPrice();
+  }, []);
+
+  const calculateTotalLeft = (params) => {
+    const gas = params?.data?.gas;
+    const gasUsed = params?.data?.gasUsed;
+    return gas - gasUsed;
+  };
+
+  const calculateTotalGas = (params) => {
+    const gasUsed = params?.data?.gasUsed;
+    const gasPrice = params?.data?.gasPrice;
+    return ((gasUsed * gasPrice) / Math.pow(10, 18)).toFixed(4);
+  };
+
+  const calculateTotalGasInUSD = (params) => {
+    const totalGas = calculateTotalGas(params);
+    console.log("heyani", params?.data);
+    console.log("totalGas:", totalGas);
+    console.log("ethPrice:", ethPrice);
+    return (totalGas * ethPrice).toFixed(2);
+  };
 
   const plotGraph = (data) => {
     const groupedData = data.reduce((acc, transaction) => {
@@ -91,9 +130,26 @@ const MyGridComponent = () => {
     { headerName: "gasPrice", field: "gasPrice" },
     { headerName: "gasUsed", field: "gasUsed" },
     { headerName: "functionName", field: "input" },
+    {
+      headerName: "Total Left",
+      field: "totalLeft",
+      valueGetter: calculateTotalLeft,
+    },
+    {
+      headerName: "Total Gas",
+      field: "totalGas",
+      valueGetter: calculateTotalGas,
+    },
+    {
+      headerName: "Total Gas (In $)",
+      field: "totalGasInUSD",
+      valueGetter: calculateTotalGasInUSD,
+    },
   ];
 
   const exportToExcel = () => {
+    let todayDate = new Date();
+    console.log("today's date", todayDate);
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Transactions");
     const headers = Object.keys(rowData[0]);
@@ -112,10 +168,26 @@ const MyGridComponent = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "transactions.xlsx";
+      a.download = `transactions${getCurrentDateinExcel()}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     });
+  };
+
+  const getCurrentDate = () => {
+    const today = new Date();
+    const dd = String(today.getDate());
+    const mm = String(today.getMonth() + 1);
+    const yyyy = today.getFullYear();
+    return `transactions_${dd}_${mm}_${yyyy}.csv`;
+  };
+
+  const getCurrentDateinExcel = () => {
+    const today = new Date();
+    const dd = String(today.getDate());
+    const mm = String(today.getMonth() + 1);
+    const yyyy = today.getFullYear();
+    return `transactions_${dd}_${mm}_${yyyy}.xlsx`;
   };
 
   return (
@@ -145,12 +217,13 @@ const MyGridComponent = () => {
       <div style={{ marginTop: "20px" }}>
         <CSVLink
           data={rowData}
-          filename={"transactions.csv"}
+          filename={`transactions${getCurrentDate()}.csv`}
           className="btn btn-primary"
           target="_blank"
         >
           Export CSV
-        </CSVLink> &nbsp;
+        </CSVLink>
+        &nbsp;
         <button className="btn btn-primary" onClick={exportToExcel}>
           Export Excel
         </button>
